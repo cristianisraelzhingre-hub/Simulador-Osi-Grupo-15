@@ -1,0 +1,287 @@
+import tkinter as tk
+from tkinter import messagebox
+import time
+import base64
+import random
+
+class SimuladorRedOSICompleto:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("SIMULADOR DE RED Y MODELO OSI - UNEMI")
+        
+        # Tamaño inicial redimensionable
+        self.root.geometry("1150x760")
+        self.root.minsize(950, 600)
+        self.root.resizable(True, True)
+
+        # Paleta Institucional UNEMI
+        self.C_AZUL = "#1B365D"
+        self.C_TOMATE = "#F26522"
+        self.C_BG = "#F4F6F9"
+        self.C_CARD = "#FFFFFF"
+        self.C_BORDE = "#D0D7DE"
+        self.C_TEXTO = "#1F2328"
+
+        self.root.configure(bg=self.C_BG)
+
+        self._crear_encabezado()
+        self._crear_panel_controles()
+        self._crear_topologia_red()
+        self._crear_visor_encabezados()
+        self._crear_consolas_resumen()
+
+    def _crear_encabezado(self):
+        # Aumentada la altura del contenedor para dar espacio al texto
+        f_head = tk.Frame(self.root, bg=self.C_AZUL, height=60)
+        f_head.pack(fill=tk.X)
+        f_head.pack_propagate(False)
+
+        tk.Label(
+            f_head, text="UNIVERSIDAD ESTATAL DE MILAGRO", 
+            font=("Segoe UI", 14, "bold"), bg=self.C_AZUL, fg="white"
+        ).pack(pady=(6, 2))
+
+        # Subtítulo en color Blanco, texto más grande y separado del borde inferior
+        tk.Label(
+            f_head, text="Simulación de Transmisión de Datos en Red (Modelo OSI)", 
+            font=("Segoe UI", 10, "bold"), bg=self.C_AZUL, fg="white"
+        ).pack(pady=(0, 6))
+
+    def _crear_panel_controles(self):
+        f_ctrl = tk.Frame(self.root, bg=self.C_CARD, bd=1, relief=tk.SOLID)
+        f_ctrl.pack(fill=tk.X, padx=10, pady=5)
+
+        tk.Label(
+            f_ctrl, text="Mensaje de Aplicación:", 
+            font=("Segoe UI", 9, "bold"), bg=self.C_CARD, fg=self.C_AZUL
+        ).pack(side=tk.LEFT, padx=8, pady=5)
+
+        self.entry_msg = tk.Entry(f_ctrl, width=42, font=("Consolas", 10), bd=2, relief=tk.GROOVE)
+        self.entry_msg.insert(0, "Práctica de Redes UNEMI 2026")
+        self.entry_msg.pack(side=tk.LEFT, padx=5, pady=5)
+
+        btn_enviar = tk.Button(
+            f_ctrl, text=" Transmitir Paquete ", command=self.iniciar_transmision,
+            bg=self.C_TOMATE, fg="white", font=("Segoe UI", 8, "bold"), bd=0, padx=12, pady=4, cursor="hand2"
+        )
+        btn_enviar.pack(side=tk.LEFT, padx=6)
+
+        btn_reset = tk.Button(
+            f_ctrl, text=" Limpiar ", command=self.resetear,
+            bg=self.C_AZUL, fg="white", font=("Segoe UI", 8, "bold"), bd=0, padx=12, pady=4, cursor="hand2"
+        )
+        btn_reset.pack(side=tk.LEFT, padx=4)
+
+    def _crear_topologia_red(self):
+        f_topo = tk.Frame(self.root, bg=self.C_BG)
+        f_topo.pack(fill=tk.X, padx=10, pady=4)
+
+        # Host A (Emisor)
+        f_host_a = tk.Frame(f_topo, bg=self.C_CARD, bd=1, relief=tk.SOLID, width=250, height=125)
+        f_host_a.pack(side=tk.LEFT, padx=5)
+        f_host_a.pack_propagate(False)
+
+        tk.Label(f_host_a, text="💻 HOST A (EMISOR)", font=("Segoe UI", 9, "bold"), bg=self.C_AZUL, fg="white", pady=3).pack(fill=tk.X)
+        tk.Label(f_host_a, text="IP: 192.168.1.10\nMAC: AA:BB:CC:11:22:33", font=("Consolas", 8), bg=self.C_CARD, fg=self.C_TEXTO, justify=tk.LEFT).pack(pady=5)
+        
+        self.lbl_capa_a = tk.Label(f_host_a, text="Estado: EN ESPERA", font=("Segoe UI", 8, "bold"), bg="#E9ECEF", fg=self.C_AZUL, pady=3)
+        self.lbl_capa_a.pack(fill=tk.X, padx=8, side=tk.BOTTOM, pady=5)
+
+        # Canal Medio Físico
+        self.canvas_medio = tk.Canvas(f_topo, bg=self.C_BG, height=125, highlightthickness=0)
+        self.canvas_medio.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.canvas_medio.bind("<Configure>", self._dibujar_canal_fisico)
+
+        # Host B (Receptor)
+        f_host_b = tk.Frame(f_topo, bg=self.C_CARD, bd=1, relief=tk.SOLID, width=250, height=125)
+        f_host_b.pack(side=tk.LEFT, padx=5)
+        f_host_b.pack_propagate(False)
+
+        tk.Label(f_host_b, text="💻 HOST B (RECEPTOR)", font=("Segoe UI", 9, "bold"), bg=self.C_TOMATE, fg="white", pady=3).pack(fill=tk.X)
+        tk.Label(f_host_b, text="IP: 192.168.1.20\nMAC: DD:EE:FF:44:55:66", font=("Consolas", 8), bg=self.C_CARD, fg=self.C_TEXTO, justify=tk.LEFT).pack(pady=5)
+
+        self.lbl_capa_b = tk.Label(f_host_b, text="Estado: EN ESPERA", font=("Segoe UI", 8, "bold"), bg="#E9ECEF", fg=self.C_AZUL, pady=3)
+        self.lbl_capa_b.pack(fill=tk.X, padx=8, side=tk.BOTTOM, pady=5)
+
+    def _dibujar_canal_fisico(self, event=None):
+        self.canvas_medio.delete("canal_element")
+        w = self.canvas_medio.winfo_width()
+        
+        # 1. Línea de puntos de fondo
+        self.canvas_medio.create_line(10, 68, w - 10, 68, width=3, fill=self.C_BORDE, dash=(4, 4), tags="canal_element")
+        
+        # 2. Texto centrado arriba de la línea
+        self.canvas_medio.create_text(w / 2, 38, text="CANAL DE TRANSMISIÓN FÍSICO", font=("Segoe UI", 8, "bold"), fill=self.C_AZUL, tags="canal_element")
+
+        # 3. Elemento Paquete PDU
+        if not hasattr(self, 'pkt_shape') or not self.canvas_medio.find_withtag("pdu_shape"):
+            self.pkt_shape = self.canvas_medio.create_rectangle(10, 52, 65, 80, fill=self.C_TOMATE, outline="white", width=2, state=tk.HIDDEN, tags="pdu_shape")
+            self.pkt_text = self.canvas_medio.create_text(37, 66, text="PDU", font=("Segoe UI", 8, "bold"), fill="white", state=tk.HIDDEN, tags="pdu_text")
+
+        self.canvas_medio.tag_raise("pdu_shape")
+        self.canvas_medio.tag_raise("pdu_text")
+
+    def _crear_visor_encabezados(self):
+        f_visor = tk.Frame(self.root, bg=self.C_CARD, bd=1, relief=tk.SOLID)
+        f_visor.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.lbl_titulo_visor = tk.Label(
+            f_visor, text="ESTRUCTURA DE LA TRAMA: ENCAPSULAMIENTO (CAPAS 7 ➔ 1)", 
+            font=("Segoe UI", 9, "bold"), bg=self.C_AZUL, fg="white", pady=5
+        )
+        self.lbl_titulo_visor.pack(fill=tk.X)
+
+        self.f_bloques = tk.Frame(f_visor, bg=self.C_CARD)
+        self.f_bloques.pack(fill=tk.BOTH, expand=True, padx=8, pady=10)
+
+    def _crear_consolas_resumen(self):
+        f_consolas = tk.Frame(self.root, bg=self.C_BG)
+        f_consolas.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 6))
+
+        # Consola Izquierda (Host A)
+        f_cons_a = tk.Frame(f_consolas, bg=self.C_CARD, bd=1, relief=tk.SOLID)
+        f_cons_a.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 3))
+
+        tk.Label(f_cons_a, text="TERMINAL EMISOR (CAPAS 7 ➔ 1)", font=("Segoe UI", 8, "bold"), bg=self.C_AZUL, fg="#FFCC00", pady=2).pack(fill=tk.X)
+        self.consola_a = tk.Text(f_cons_a, bg="#1A1A1A", fg="#00FF00", font=("Consolas", 8), bd=0, height=10)
+        self.consola_a.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
+
+        # Consola Derecha (Host B)
+        f_cons_b = tk.Frame(f_consolas, bg=self.C_CARD, bd=1, relief=tk.SOLID)
+        f_cons_b.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(3, 0))
+
+        tk.Label(f_cons_b, text="TERMINAL RECEPTOR (CAPAS 1 ➔ 7)", font=("Segoe UI", 8, "bold"), bg=self.C_TOMATE, fg="#FFCC00", pady=2).pack(fill=tk.X)
+        self.consola_b = tk.Text(f_cons_b, bg="#1A1A1A", fg="#33CCFF", font=("Consolas", 8), bd=0, height=10)
+        self.consola_b.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
+
+    def log_a(self, msg):
+        self.consola_a.insert(tk.END, msg + "\n")
+        self.consola_a.see(tk.END)
+        self.root.update()
+
+    def log_b(self, msg):
+        self.consola_b.insert(tk.END, msg + "\n")
+        self.consola_b.see(tk.END)
+        self.root.update()
+
+    def resetear(self):
+        self.canvas_medio.itemconfig(self.pkt_shape, state=tk.HIDDEN)
+        self.canvas_medio.itemconfig(self.pkt_text, state=tk.HIDDEN)
+        self.canvas_medio.coords(self.pkt_shape, 10, 52, 65, 80)
+        self.canvas_medio.coords(self.pkt_text, 37, 66)
+
+        self.lbl_capa_a.config(text="Estado: EN ESPERA", bg="#E9ECEF", fg=self.C_AZUL)
+        self.lbl_capa_b.config(text="Estado: EN ESPERA", bg="#E9ECEF", fg=self.C_AZUL)
+        self.lbl_titulo_visor.config(text="ESTRUCTURA DE LA TRAMA: ENCAPSULAMIENTO (CAPAS 7 ➔ 1)", bg=self.C_AZUL)
+
+        for widget in self.f_bloques.winfo_children():
+            widget.destroy()
+
+        self.consola_a.delete(1.0, tk.END)
+        self.consola_b.delete(1.0, tk.END)
+
+    def _agregar_bloque_header(self, num_capa, nombre_capa, valor, color):
+        b = tk.Frame(self.f_bloques, bg=color, bd=1, relief=tk.RAISED, padx=6, pady=4)
+        b.pack(side=tk.LEFT, padx=3, pady=5)
+
+        l1 = tk.Label(b, text=f"[L{num_capa}] {nombre_capa}", font=("Segoe UI", 8, "bold"), bg=color, fg="white")
+        l1.pack()
+        l2 = tk.Label(b, text=valor, font=("Consolas", 8), bg=color, fg="white")
+        l2.pack()
+        self.root.update()
+        return b, l1, l2
+
+    def iniciar_transmision(self):
+        msg = self.entry_msg.get()
+        if not msg:
+            messagebox.showwarning("Error", "Ingrese un mensaje.")
+            return
+
+        self.resetear()
+
+        # FASE 1: ENCAPSULAMIENTO (HOST A: Capas 7 -> 1)
+        pasos_a = [
+            (7, "APLICACIÓN", f"Datos: '{msg}'", "#2B5797"),
+            (6, "PRESENTACIÓN", f"Base64: {base64.b64encode(msg.encode()).decode()[:8]}...", "#002050"),
+            (5, "SESIÓN", "ID: 8841", "#008A00"),
+            (4, "TRANSPORTE", "TCP: 8080->80", "#603CBA"),
+            (3, "RED", "IP: .10 -> .20", "#B91D47"),
+            (2, "ENLACE", "MAC: AA->DD", "#E3A21A"),
+            (1, "FÍSICA", "10110101...", "#D80073")
+        ]
+
+        referencias_bloques = []
+
+        for num_capa, capa_nombre, desc, color in pasos_a:
+            self.lbl_capa_a.config(text=f"Encapsulando: L{num_capa}. {capa_nombre}", bg=self.C_TOMATE, fg="white")
+            ref = self._agregar_bloque_header(num_capa, capa_nombre, desc, color)
+            referencias_bloques.append(ref)
+            
+            wq = random.expovariate(3.0)
+            self.log_a(f"[PC-A] Capa {num_capa} ({capa_nombre}): Header agregado (Wq: {wq:.4f}s)")
+            time.sleep(0.7)
+
+        self.lbl_capa_a.config(text="Proceso Completado (Trama Lista)", bg="#2EC4B6", fg="white")
+        self.log_a("\n>>> [CANAL] Propagación física en curso...")
+
+        # FASE 2: TRANSMISIÓN EN EL MEDIO FÍSICO
+        self.canvas_medio.itemconfig(self.pkt_shape, state=tk.NORMAL)
+        self.canvas_medio.itemconfig(self.pkt_text, state=tk.NORMAL)
+        self.canvas_medio.tag_raise("pdu_shape")
+        self.canvas_medio.tag_raise("pdu_text")
+
+        w_canal = self.canvas_medio.winfo_width() - 60
+        for x in range(10, max(w_canal, 380), 6):
+            self.canvas_medio.coords(self.pkt_shape, x, 52, x+55, 80)
+            self.canvas_medio.coords(self.pkt_text, x+27, 66)
+            self.root.update()
+            time.sleep(0.02)
+
+        self.log_b(">>> [CANAL] Trama de bits recibida en adaptador de red.")
+
+        # FASE 3: DESENCAPSULAMIENTO (HOST B: Capas 1 -> 7)
+        self.lbl_titulo_visor.config(
+            text="PROCESO DE DESENCAPSULAMIENTO EN HOST B: REMOVIENDO ENCABEZADOS (CAPAS 1 ➔ 7)", 
+            bg=self.C_TOMATE
+        )
+
+        pasos_b = [
+            (1, "FÍSICA", "Bits leídos y trama reconstruida"),
+            (2, "ENLACE", "Header Ethernet removido (MAC OK)"),
+            (3, "RED", "Header IP removido (IP OK)"),
+            (4, "TRANSPORTE", "Segmento TCP reensamblado"),
+            (5, "SESIÓN", "Sesión ID 8841 validada"),
+            (6, "PRESENTACIÓN", "Base64 decodificado"),
+            (7, "APLICACIÓN", f"Mensaje entregado a la app")
+        ]
+
+        for i in range(7):
+            idx_bloque = 6 - i
+            num_capa, capa_nombre, desc = pasos_b[i]
+
+            self.lbl_capa_b.config(text=f"Desencapsulando: L{num_capa}. {capa_nombre}", bg=self.C_TOMATE, fg="white")
+            wq = random.uniform(0.01, 0.08)
+            self.log_b(f"[PC-B] Capa {num_capa} ({capa_nombre}): {desc} (Wq: {wq:.4f}s)")
+
+            b_frame, l1, l2 = referencias_bloques[idx_bloque]
+            b_frame.config(bg="#E74C3C")
+            l1.config(bg="#E74C3C", text=f"✘ [L{num_capa}] {capa_nombre}")
+            l2.config(bg="#E74C3C", text="[REMOVIDO]")
+            self.root.update()
+            time.sleep(0.9)
+
+            b_frame.config(bg="#BDC3C7")
+            l1.config(bg="#BDC3C7", fg="#7F8C8D")
+            l2.config(bg="#BDC3C7", fg="#7F8C8D")
+            self.root.update()
+            time.sleep(0.3)
+
+        self.lbl_capa_b.config(text="¡Mensaje Recibido con Éxito!", bg="#2EC4B6", fg="white")
+        self.log_b(f"\n{'='*45}\nÉXITO: Mensaje Recuperado: '{msg}'\n{'='*45}")
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = SimuladorRedOSICompleto(root)
+    root.mainloop()
